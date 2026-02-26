@@ -1,0 +1,14 @@
+# Environment variables / Secrets
+.env
+
+# Final generated outputs
+final_resume.md
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
