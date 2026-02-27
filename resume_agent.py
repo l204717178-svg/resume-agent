@@ -9,14 +9,16 @@ from openai import OpenAI
 # ---------------------------------------------------------
 class DiagnosisResult(BaseModel):
     score: int = Field(description="整体匹配度评分 (0-100)")
-    fatal_flaws: list[str] = Field(description="列出 3 个若不修改将直接导致被刷的硬伤（缺失的关键要素或逻辑断层）")
+    fatal_flaws: list[str] = Field(description="列出 3 个若不修改将直接导致被刷的硬伤（缺失的硬技能或逻辑断层）")
+    competitiveness_analysis: str = Field(description="一针见血点评这份简历在该岗位竞争池中的真实水平（如：处于劣势、中规中矩、极具竞争力），并说明原因。不超过50字。")
     optimization_strategy: str = Field(description="指明经历中哪些被忽视的细节可以用来弥补这些劣势")
 
 class Node1Output(BaseModel):
     core_responsibilities: list[str] = Field(description="提取核心职责 (3-5条)")
     hard_skills: list[str] = Field(description="必备硬技能")
     ats_keywords: list[str] = Field(description="ATS 高频关键词清单")
-    hidden_needs: str = Field(description="隐藏需求（业务痛点、团队协作风格）")
+    hidden_needs: str = Field(description="隐藏软技能需求（业务痛点、团队协作风格、抗压能力等）")
+    interview_prediction: list[str] = Field(description="结合简历的痛点，预测如果这份简历勉强进入面试，HR 或技术面官一定会重点且犀利追问的 2 个问题（挖掘深度或真实性）。")
     diagnosis: DiagnosisResult
 
 # ---------------------------------------------------------
@@ -67,13 +69,13 @@ class ResumeAgent:
         
         # 赋予 Agent 顶级招聘专家 Persona
         self.system_instruction = (
-            "你是一个以结果为导向的顶级招聘专家、岗位分析师和 ATS (自动追踪系统) 算法模拟器。\n"
-            "你的首要目标是：最大化用户简历通过双重筛选（ATS 关键词匹配 + 挑剔的人工 HR 面试）的概率。\n\n"
+            "你是一个以结果为导向的顶级招聘专家、资深岗位分析师（拥有十年一线大厂与独角兽公司架构师甄别经验）和最苛刻的 ATS (自动追踪系统) 算法模拟器。\n"
+            "你的首要目标是：像拿着放大镜挑刺一样，尽最大可能指出用户简历的痛点并直接给出极具执行力的重构策略，使得修改后的简历能 100% 击破双重筛选。\n\n"
             "【强制规则】\n"
-            "1. 绝对禁止捏造、虚构、夸大任何用户经历。\n"
-            "2. 绝对禁止使用奉承、安慰、附和或情绪化语言。\n"
-            "3. 事实、逻辑、数据优先。所有输出必须清晰、具体、可执行。\n"
-            "4. 深刻理解不同体量公司（大厂 vs 创业公司）的筛选偏好。"
+            "1. 绝对禁止捏造、虚构、夸大任何用户经历，只允许在现有的低维经历上进行深挖、提炼和拔高维度。\n"
+            "2. 绝对禁止使用奉承、安慰、大话或情绪化语言。你的语言必须冷酷、专业、一针见血。\n"
+            "3. 事实、逻辑、数据优先。所有输出必须清晰、具体、直击要害。\n"
+            "4. 深刻洞察不同体量公司（大厂的系统性/中台化思维 vs 创业公司的从0到1/全栈多面手能力）的深层深水区筛选偏好。"
         )
 
     def analyze_jd_and_match(self, resume_text: str, jd_text: str) -> Node1Output:
@@ -86,8 +88,8 @@ class ResumeAgent:
             f"目标 JD:\n{jd_text}\n\n"
             f"完整经历:\n{resume_text}\n\n"
             "任务：\n"
-            "1. 透视目标 JD：提取核心职责 (3-5条)、必备硬技能、梳理 ATS 高频关键词清单、洞察隐藏需求（业务痛点、团队协作风格）。\n"
-            "2. 残酷诊断：对比用户的 [完整经历] 与该 JD，进行初步匹配。输出整体匹配度评分 (0-100)，列出列出 3 个致命劣势，并提供优化策略（指明经历中哪些被忽视的细节可以用来弥补这些劣势）。\n"
+            "1. 透视目标 JD：深度提取并总结岗位最核心的需求（拒绝照抄原文）：核心职责 (3-5条)、必备硬技能、梳理出 ATS 一定会抓取的高频关键词清单，并深刻洞察招聘方没有写在表面上的【隐藏软技能需求】（如特定场景的业务痛点、是否需要很强的跨部门拉通或排雷能力等）。\n"
+            "2. 残酷诊断：对比用户的 [完整经历] 与该 JD，进行初步匹配。不仅给出真实的整体匹配度评分 (0-100)，还要输出这段简历【在该段位竞争池中的真实竞争力评估】；列出 3 个如果不修改定会被刷掉的【致命硬伤】；给出【面试官犀利考点预测】；最后提供【抢救性优化策略】（指明现有经历中哪些不起眼的细节通过包装可以用来弥补劣势）。\n"
             "请以冷酷、精炼的方式输出，不带任何废话。\n"
             "你必须严格返回一个 JSON 对象，结构必须完全符合以下定义，不要包裹在 Markdown 代码块里，直接返回 JSON 字符串本身：\n"
             "{\n"
@@ -95,10 +97,12 @@ class ResumeAgent:
             '  "hard_skills": ["技能1"],\n'
             '  "ats_keywords": ["关键词1"],\n'
             '  "hidden_needs": "隐藏需求描述",\n'
+            '  "interview_prediction": ["犀利面试问题预览1", "犀利面试问题预览2"],\n'
             '  "diagnosis": {\n'
             '    "score": 85,\n'
             '    "fatal_flaws": ["硬伤1", "硬伤2", "硬伤3"],\n'
-            '    "optimization_strategy": "优化策略描述"\n'
+            '    "competitiveness_analysis": "竞争池水平点评",\n'
+            '    "optimization_strategy": "抢救策略描述"\n'
             "  }\n"
             "}"
         )
