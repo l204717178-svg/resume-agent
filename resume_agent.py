@@ -249,6 +249,40 @@ def process_resume(resume_filepath: str, jd_filepath: str, company_type: str, ou
     
     print(f"\n✅ 终局生成完毕！定制简历已保存至: {output_filepath}")
 
+def process_resume_ui(resume_text: str, jd_text: str, company_type: str, api_key: str = None) -> dict:
+    """
+    提供给前端 UI 的独立接口，不涉及文件读写打印，纯流水线流转并返回中间状态供渲染
+    返回结果词典: {
+        "status": "success" | "error",
+        "error_msg": str,
+        "node1": Node1Output,
+        "node2_rewritten": str,
+        "node3_final": str
+    }
+    """
+    try:
+        agent = ResumeAgent(api_key=api_key)
+    except Exception as e:
+        return {"status": "error", "error_msg": f"❌ 初始化失败，请确保 API Key 格式正确。错误详情: {e}"}
+
+    try:
+        # 2. 调用 Node 1
+        node1_out = agent.analyze_jd_and_match(resume_text, jd_text)
+        
+        # 3. 调用 Node 2
+        rewritten_exp = agent.rewrite_experience(resume_text, node1_out.ats_keywords)
+        
+        # 4. 调用 Node 3
+        final_resume = agent.generate_final_resume(rewritten_exp, node1_out.hidden_needs, company_type)
+        
+        return {
+            "status": "success",
+            "node1": node1_out,
+            "node2_rewritten": rewritten_exp,
+            "node3_final": final_resume
+        }
+    except Exception as e:
+        return {"status": "error", "error_msg": f"❌ 推理过程中发生错误: {e}"}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="超级简历 Agent (DeepSeek 版)")
