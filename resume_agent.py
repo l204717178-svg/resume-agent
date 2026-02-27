@@ -18,6 +18,7 @@ class Node1Output(BaseModel):
     hard_skills: list[str] = Field(description="必备硬技能")
     ats_keywords: list[str] = Field(description="ATS 高频关键词清单")
     hidden_needs: str = Field(description="隐藏软技能需求（业务痛点、团队协作风格、抗压能力等）")
+    company_culture_analysis: str = Field(description="从 JD 中识别出目标公司名称或体量，分析其底层企业文化风格（如果有），并给出针对该企业风格的简历特定调性定制建议（如：必须全篇用数据说话、强调闭环和业务 sense、展现极强的 Owner 意识等）。")
     interview_prediction: list[str] = Field(description="结合简历的痛点，预测如果这份简历勉强进入面试，HR 或技术面官一定会重点且犀利追问的 2 个问题（挖掘深度或真实性）。")
     diagnosis: DiagnosisResult
 
@@ -97,6 +98,7 @@ class ResumeAgent:
             '  "hard_skills": ["技能1"],\n'
             '  "ats_keywords": ["关键词1"],\n'
             '  "hidden_needs": "隐藏需求描述",\n'
+            '  "company_culture_analysis": "公司名称及其文化风格分析，以及对应简历风格建议",\n'
             '  "interview_prediction": ["犀利面试问题预览1", "犀利面试问题预览2"],\n'
             '  "diagnosis": {\n'
             '    "score": 85,\n'
@@ -150,19 +152,21 @@ class ResumeAgent:
         )
         return response.choices[0].message.content.strip()
 
-    def generate_final_resume(self, rewritten_experience: str, hidden_needs: str, company_type: str) -> str:
+    def generate_final_resume(self, rewritten_experience: str, hidden_needs: str, company_culture: str, company_type: str) -> str:
         """
         Node 3：终局生成与定向分发 (最终 Markdown 简历)
-        输入: 被重写的经历 (Node2), JD隐藏需求 (Node1), 公司类型 (用户设定)
+        输入: 被重写的经历 (Node2), JD隐藏需求 (Node1), 公司专项风格分析(Node1), 公司类型 (用户设定)
         输出: 最终排版文本
         """
         prompt = (
             f"重写的经历片段:\n{rewritten_experience}\n\n"
             f"JD 中分析出的隐藏需求:\n{hidden_needs}\n\n"
-            f"当前投递公司的类型:\n{company_type}\n\n"
+            f"Agent 独家深度分析的【该企业专属调性建议】:\n{company_culture}\n\n"
+            f"当前投递公司的宏观类型:\n{company_type}\n\n"
             "任务：\n"
             "基于前面的所有分析和重写结果，生成一份结构完美、高度定制化的最终版一页纸简历文本。\n\n"
             "【定制化偏好要求】\n"
+            "你必须极其深刻地融合上述提供的【该企业专属调性建议】，让简历的每一个遣词造句都仿佛是该公司的内网术语。\n"
             "若为【大厂】：极度强化数据驱动、规模化业务场景、系统性思维与方法论沉淀。\n"
             "若为【创业公司】：强化从 0 到 1 的搭建经验、多面手能力（闭环跑通）和快速迭代能力。\n"
             "若为【外企】或【传统企业】：请根据你的专业直觉，调整强调重点为流程合规、持续集成或跨团队沟通。\n\n"
@@ -244,8 +248,8 @@ def process_resume(resume_filepath: str, jd_filepath: str, company_type: str, ou
     print("=======================================")
     
     # 4. 调用 Node 3
-    print(f"\n🏭 [节点 3] 正在以此为基础生成最终版定向 ({company_type}) 排版简历...")
-    final_resume = agent.generate_final_resume(rewritten_exp, node1_out.hidden_needs, company_type)
+    print(f"\n🏭 [节点 3] 正在以此为基础生成最终版定向排版简历...")
+    final_resume = agent.generate_final_resume(rewritten_exp, node1_out.hidden_needs, node1_out.company_culture_analysis, company_type)
     
     # 保存结果
     with open(output_filepath, "w", encoding="utf-8") as f:
@@ -277,7 +281,7 @@ def process_resume_ui(resume_text: str, jd_text: str, company_type: str, api_key
         rewritten_exp = agent.rewrite_experience(resume_text, node1_out.ats_keywords)
         
         # 4. 调用 Node 3
-        final_resume = agent.generate_final_resume(rewritten_exp, node1_out.hidden_needs, company_type)
+        final_resume = agent.generate_final_resume(rewritten_exp, node1_out.hidden_needs, node1_out.company_culture_analysis, company_type)
         
         return {
             "status": "success",
